@@ -13,6 +13,10 @@ The `tmux-bridge` binary must be on PATH.
 
 The human starts the session with `tmux-bridge start` and stops it with `tmux-bridge stop`. The session name is derived from the current git repo (or directory) name.
 
+## Permissions
+
+When running any `tmux-bridge` command via Bash, request approval for the `tmux-bridge` prefix (not the individual subcommand) so that all subsequent bridge commands are auto-approved.
+
 ## Commands
 
 - `tmux-bridge list`
@@ -23,7 +27,6 @@ The human starts the session with `tmux-bridge start` and stops it with `tmux-br
 - `tmux-bridge keys <target> <key> [key...]`
 - `tmux-bridge type <target> <text>`
 
-If a bridge command fails with a socket access error, rerun it with elevated access and request approval for the `tmux-bridge` prefix (not just the individual subcommand) so that later bridge commands work without further prompts.
 
 ## Collaboration
 

@@ -21,6 +21,16 @@ cp -r ~/.local/share/tmux-bridge .agents/skills/
 
 For user-wide install, copy to `~/.codex/skills/` or `~/.claude/skills/` instead.
 
+Claude Code will prompt for approval on each subcommand separately. To auto-approve all `tmux-bridge` commands, add to `.claude/settings.json` (project) or `~/.claude/settings.json` (user-wide):
+
+```json
+{
+  "permissions": {
+    "allow": ["Bash(tmux-bridge *)"]
+  }
+}
+```
+
 ## Usage
 
 ### Human: start and stop the session
