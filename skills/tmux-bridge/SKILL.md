@@ -23,6 +23,8 @@ The human starts the session with `tmux-bridge start` and stops it with `tmux-br
 - `tmux-bridge keys <target> <key> [key...]`
 - `tmux-bridge type <target> <text>`
 
+If a bridge command fails with a socket access error, rerun it with elevated access and request approval for the `tmux-bridge` prefix (not just the individual subcommand) so that later bridge commands work without further prompts.
+
 ## Collaboration
 
 - Keep bridge messages short and task-local.
