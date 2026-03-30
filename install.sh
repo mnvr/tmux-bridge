@@ -24,7 +24,7 @@ command -v tmux >/dev/null 2>&1 || fail "tmux is required. Install it with: brew
 mkdir -p "$INSTALL_DIR" "$SKILL_DIR"
 
 # Install binary
-if [ -f "$SCRIPT_DIR/tmux-bridge" ]; then
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/tmux-bridge" ]; then
   cp "$SCRIPT_DIR/tmux-bridge" "$INSTALL_DIR/tmux-bridge"
 else
   command -v curl >/dev/null 2>&1 || fail "curl is required to download tmux-bridge"
@@ -33,7 +33,7 @@ fi
 chmod +x "$INSTALL_DIR/tmux-bridge"
 
 # Install skill
-if [ -f "$SCRIPT_DIR/skills/tmux-bridge/SKILL.md" ]; then
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/skills/tmux-bridge/SKILL.md" ]; then
   cp "$SCRIPT_DIR/skills/tmux-bridge/SKILL.md" "$SKILL_DIR/SKILL.md"
 else
   curl -fsSL "$BASE_URL/skills/tmux-bridge/SKILL.md" -o "$SKILL_DIR/SKILL.md"

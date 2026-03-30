@@ -39,7 +39,7 @@ write_config() {
   cat > "$config_path" <<'CONF'
 set -g mouse on
 set -g history-limit 20000
-set -g remain-on-exit on
+set -g remain-on-exit failed
 set -g pane-border-status top
 set -g pane-active-border-style fg=colour39
 set -g pane-border-style fg=colour238
@@ -97,6 +97,17 @@ tmx() {
   tmux -S "$SOCKET_PATH" "$@"
 }
 
+is_all_digits() {
+  case "$1" in
+    ""|*[!0-9]*)
+      return 1
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+}
+
 session_state() {
   mkdir -p "$RUNTIME_DIR"
 
@@ -140,14 +151,18 @@ resolve_target() {
   target=$1
 
   case "$target" in
-    %*|*:*|*.*|[0-9]*)
+    %*|*:*|*.*)
       ;;
     *)
-      target=$(
-        tmx list-panes -a -F '#{pane_id}|#{@name}' |
-          awk -F'|' -v label="$target" '$2 == label { print $1; exit }'
-      )
-      [ -n "$target" ] || fail "no pane found with label '$1'"
+      if is_all_digits "$target"; then
+        :
+      else
+        target=$(
+          tmx list-panes -a -F '#{pane_id}|#{@name}' |
+            awk -F'|' -v label="$target" '$2 == label { print $1; exit }'
+        )
+        [ -n "$target" ] || fail "no pane found with label '$1'"
+      fi
       ;;
   esac
 
@@ -235,6 +250,8 @@ case "$command_name" in
     case "$(session_state)" in
       running)
         tmx kill-session -t "$PROJECT_NAME"
+        rm -f "$SOCKET_PATH" "$RUNTIME_DIR/tmux-bridge.conf"
+        rmdir "$RUNTIME_DIR" 2>/dev/null || true
         printf 'stopped session %s\n' "$PROJECT_NAME"
         ;;
       stopped)
