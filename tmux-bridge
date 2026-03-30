@@ -1,0 +1,325 @@
+#!/bin/sh
+
+set -eu
+
+# tmux-bridge — a shared tmux session for human-agent collaboration.
+#
+# Session lifecycle (human):
+#   tmux-bridge start
+#   tmux-bridge stop
+#
+# Bridge commands (agent):
+#   tmux-bridge list
+#   tmux-bridge label <name>
+#   tmux-bridge split <label> [command...]
+#   tmux-bridge read <target> [lines]
+#   tmux-bridge type <target> <text>
+#   tmux-bridge message <target> <text>
+#   tmux-bridge keys <target> <key> [key...]
+
+# ---------------------------------------------------------------------------
+# Project root and derived names
+# ---------------------------------------------------------------------------
+
+project_root() {
+  git rev-parse --show-toplevel 2>/dev/null || pwd
+}
+
+PROJECT_ROOT=$(project_root)
+PROJECT_NAME=$(basename "$PROJECT_ROOT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g')
+RUNTIME_DIR=/tmp/tmux-bridge/$(printf '%s\n' "$PROJECT_ROOT" | cksum | awk '{print $1}')
+SOCKET_PATH=$RUNTIME_DIR/bridge.sock
+
+# ---------------------------------------------------------------------------
+# Embedded tmux config
+# ---------------------------------------------------------------------------
+
+write_config() {
+  config_path=$RUNTIME_DIR/tmux-bridge.conf
+  cat > "$config_path" <<'CONF'
+set -g mouse on
+set -g history-limit 20000
+set -g remain-on-exit on
+set -g pane-border-status top
+set -g pane-active-border-style fg=colour39
+set -g pane-border-style fg=colour238
+set -g pane-border-format ' #{?@name,#{@name},#{pane_id}} #{pane_current_command} '
+set -g status-style fg=colour255,bg=colour236
+set -g status-left-length 1
+set -g status-left ' '
+set -g status-right-length 40
+set -g status-right '#S | %Y-%m-%d %H:%M '
+
+bind '"' split-window -v -c "#{pane_current_path}"
+bind % split-window -h -c "#{pane_current_path}"
+bind c new-window -c "#{pane_current_path}"
+CONF
+  printf '%s\n' "$config_path"
+}
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+usage() {
+  cat <<EOF
+Usage: tmux-bridge <command> [args...]
+
+Session lifecycle:
+  start         Create the session and attach (human)
+  stop          Stop the session (human)
+
+Bridge commands:
+  list          List panes in the session
+  label <name>  Label the current pane
+  split <label> [command...]
+                Split a new pane with an optional command
+  read <target> [lines]
+                Capture recent output from a pane
+  type <target> <text>
+                Send literal text to a pane
+  message <target> <text>
+                Send a bridge-formatted message to a pane
+  keys <target> <key> [key...]
+                Send key sequences to a pane
+
+Targets: pane ids (%2), tmux targets (sess:0.1), or pane labels.
+Project: $PROJECT_NAME ($PROJECT_ROOT)
+EOF
+}
+
+fail() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+tmx() {
+  tmux -S "$SOCKET_PATH" "$@"
+}
+
+session_state() {
+  mkdir -p "$RUNTIME_DIR"
+
+  output=$(tmx has-session -t "$PROJECT_NAME" 2>&1) && {
+    printf 'running\n'
+    return 0
+  }
+
+  case "$output" in
+    *"Operation not permitted"*)
+      printf 'unavailable\n'
+      ;;
+    *)
+      printf 'stopped\n'
+      ;;
+  esac
+}
+
+require_session() {
+  case "$(session_state)" in
+    running)
+      ;;
+    unavailable)
+      fail "tmux socket is not accessible from this shell"
+      ;;
+    stopped)
+      fail "session '$PROJECT_NAME' is not running. Start it with: tmux-bridge start"
+      ;;
+    *)
+      fail "unable to determine session state"
+      ;;
+  esac
+}
+
+require_inside_tmux() {
+  [ -n "${TMUX_PANE:-}" ] || fail "this command must run inside the shared tmux session"
+  tmx display-message -t "$TMUX_PANE" -p '#{pane_id}' >/dev/null 2>&1 || fail "current pane is not visible to the shared session"
+}
+
+resolve_target() {
+  target=$1
+
+  case "$target" in
+    %*|*:*|*.*|[0-9]*)
+      ;;
+    *)
+      target=$(
+        tmx list-panes -a -F '#{pane_id}|#{@name}' |
+          awk -F'|' -v label="$target" '$2 == label { print $1; exit }'
+      )
+      [ -n "$target" ] || fail "no pane found with label '$1'"
+      ;;
+  esac
+
+  tmx display-message -t "$target" -p '#{pane_id}' >/dev/null 2>&1 || fail "invalid target: $1"
+  printf '%s\n' "$target"
+}
+
+current_pane_name() {
+  require_inside_tmux
+  name=$(tmx display-message -t "$TMUX_PANE" -p '#{@name}')
+  if [ -n "$name" ]; then
+    printf '%s\n' "$name"
+  else
+    printf '%s\n' "$TMUX_PANE"
+  fi
+}
+
+current_pane_location() {
+  require_inside_tmux
+  tmx display-message -t "$TMUX_PANE" -p '#{session_name}:#{window_index}.#{pane_index}'
+}
+
+current_pane_path() {
+  require_inside_tmux
+  tmx display-message -t "$TMUX_PANE" -p '#{pane_current_path}'
+}
+
+shell_join() {
+  first=1
+  for arg in "$@"; do
+    escaped=$(printf '%s' "$arg" | sed "s/'/'\"'\"'/g")
+    if [ "$first" -eq 1 ]; then
+      printf "'%s'" "$escaped"
+      first=0
+    else
+      printf " '%s'" "$escaped"
+    fi
+  done
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+command_name=${1:-}
+[ -n "$command_name" ] || {
+  usage >&2
+  exit 1
+}
+shift
+
+if [ "$command_name" = "help" ] || [ "$command_name" = "-h" ] || [ "$command_name" = "--help" ]; then
+  usage
+  exit 0
+fi
+
+command -v tmux >/dev/null 2>&1 || fail "tmux is not installed. Install it with: brew install tmux"
+
+case "$command_name" in
+
+  # ---- Session lifecycle (human) ----
+
+  start)
+    [ -z "${TMUX:-}" ] || fail "already inside tmux. Open another terminal to start or attach the shared session."
+
+    case "$(session_state)" in
+      running)
+        ;;
+      stopped)
+        config_path=$(write_config)
+        tmux -f "$config_path" -S "$SOCKET_PATH" new-session -d -s "$PROJECT_NAME" -n agents -c "$PROJECT_ROOT"
+        ;;
+      unavailable)
+        fail "tmux socket is not accessible from this shell"
+        ;;
+      *)
+        fail "unable to determine session state"
+        ;;
+    esac
+
+    exec tmux -S "$SOCKET_PATH" attach-session -t "$PROJECT_NAME"
+    ;;
+
+  stop)
+    case "$(session_state)" in
+      running)
+        tmx kill-session -t "$PROJECT_NAME"
+        printf 'stopped session %s\n' "$PROJECT_NAME"
+        ;;
+      stopped)
+        printf 'session %s is not running\n' "$PROJECT_NAME"
+        ;;
+      unavailable)
+        fail "tmux socket is not accessible from this shell"
+        ;;
+      *)
+        fail "unable to determine session state"
+        ;;
+    esac
+    ;;
+
+  # ---- Bridge commands (agent) ----
+
+  list)
+    require_session
+    printf '%-8s %-18s %-10s %-12s %s\n' "PANE" "TARGET" "LABEL" "COMMAND" "CWD"
+    tmx list-panes -a -F '#{pane_id}|#{session_name}:#{window_index}.#{pane_index}|#{@name}|#{pane_current_command}|#{pane_current_path}' |
+      while IFS='|' read -r pane_id pane_target pane_label pane_command pane_cwd; do
+        [ -n "$pane_label" ] || pane_label='-'
+        printf '%-8s %-18s %-10s %-12s %s\n' "$pane_id" "$pane_target" "$pane_label" "$pane_command" "$pane_cwd"
+      done
+    ;;
+
+  label)
+    [ "$#" -eq 1 ] || fail "label requires a pane name"
+    require_inside_tmux
+    tmx set-option -p -t "$TMUX_PANE" @name "$1"
+    printf '%s\n' "$1"
+    ;;
+
+  split)
+    [ "$#" -ge 1 ] || fail "split requires a pane label"
+    require_inside_tmux
+    pane_label=$1
+    shift
+    new_pane=$(tmx split-window -d -h -t "$TMUX_PANE" -c "$(current_pane_path)" -P -F '#{pane_id}')
+    tmx set-option -p -t "$new_pane" @name "$pane_label"
+    if [ "$#" -gt 0 ]; then
+      tmx send-keys -t "$new_pane" -l -- "$(shell_join "$@")"
+      tmx send-keys -t "$new_pane" Enter
+    fi
+    printf '%s %s\n' "$new_pane" "$pane_label"
+    ;;
+
+  read)
+    [ "$#" -ge 1 ] || fail "read requires a target"
+    require_session
+    resolved=$(resolve_target "$1")
+    lines=${2:-20}
+    tmx capture-pane -t "$resolved" -p -J -S "-$lines"
+    ;;
+
+  type)
+    [ "$#" -ge 2 ] || fail "type requires a target and text"
+    require_session
+    resolved=$(resolve_target "$1")
+    shift
+    tmx send-keys -t "$resolved" -l -- "$*"
+    ;;
+
+  message)
+    [ "$#" -ge 2 ] || fail "message requires a target and text"
+    require_session
+    require_inside_tmux
+    resolved=$(resolve_target "$1")
+    shift
+    sender_name=$(current_pane_name)
+    sender_location=$(current_pane_location)
+    payload="[tmux-bridge from:$sender_name pane:$TMUX_PANE at:$sender_location] $*"
+    tmx send-keys -t "$resolved" -l -- "$payload"
+    ;;
+
+  keys)
+    [ "$#" -ge 2 ] || fail "keys requires a target and at least one key"
+    require_session
+    resolved=$(resolve_target "$1")
+    shift
+    tmx send-keys -t "$resolved" "$@"
+    ;;
+
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac
