@@ -2,6 +2,10 @@
 
 A shared tmux session for human-agent collaboration. One binary handles session lifecycle (for the human) and pane coordination (for agents).
 
+> [!WARNING]
+>
+> This allows agents to type arbitrary commands into shell prompts, and more generally to send input to any pane in the shared tmux session.
+
 ## Install
 
 Requires macOS and `tmux` (`brew install tmux`).
