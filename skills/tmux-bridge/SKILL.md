@@ -27,6 +27,10 @@ When running any `tmux-bridge` command via Bash, request approval for the `tmux-
 - `tmux-bridge keys <target> <key> [key...]`
 - `tmux-bridge type <target> <text>`
 
+Notes:
+- `message` and `type` put text into the target pane but do not submit it.
+- `keys` sends special keys such as `Enter`.
+
 
 ## Collaboration
 
