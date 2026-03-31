@@ -32,7 +32,7 @@ else
 fi
 chmod +x "$INSTALL_DIR/tmux-bridge"
 
-# Install skill
+# Install skill to staging area
 if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/skills/tmux-bridge/SKILL.md" ]; then
   cp "$SCRIPT_DIR/skills/tmux-bridge/SKILL.md" "$SKILL_DIR/SKILL.md"
 else
@@ -51,7 +51,52 @@ case ":$PATH:" in
     ;;
 esac
 
-printf '\nTo add the skill to your project:\n'
-printf '  mkdir -p .agents/skills\n'
-printf '  cp -r ~/.local/share/tmux-bridge .agents/skills/\n'
-printf '\nFor user-wide install, copy to ~/.codex/skills/ or ~/.claude/skills/ instead.\n'
+# Skill install locations
+SKILL_DEST_1=".agents/skills/tmux-bridge"
+SKILL_DEST_2=".claude/skills/tmux-bridge"
+SKILL_DEST_3="$HOME/.codex/skills/tmux-bridge"
+SKILL_DEST_4="$HOME/.claude/skills/tmux-bridge"
+
+install_skill() {
+  mkdir -p "$1"
+  cp "$SKILL_DIR/SKILL.md" "$1/SKILL.md"
+  printf '  %s\n' "$1"
+}
+
+# Pre-select existing installs
+default=""
+for i in 1 2 3 4; do
+  eval "dest=\$SKILL_DEST_$i"
+  if [ -f "$dest/SKILL.md" ]; then
+    default="${default:+$default,}$i"
+  fi
+done
+
+printf '\nWhere should the skill be installed?\n'
+printf '  1) .agents/skills/tmux-bridge/    (this project, Codex)\n'
+printf '  2) .claude/skills/tmux-bridge/    (this project, Claude Code)\n'
+printf '  3) ~/.codex/skills/tmux-bridge/   (all projects, Codex)\n'
+printf '  4) ~/.claude/skills/tmux-bridge/  (all projects, Claude Code)\n'
+printf '  s) skip\n'
+if [ -n "$default" ]; then
+  printf 'Choice (comma-separated for multiple) [%s]: ' "$default"
+else
+  printf 'Choice (comma-separated for multiple) [s]: '
+fi
+read -r choice
+
+if [ -z "$choice" ]; then
+  choice="${default:-s}"
+fi
+
+IFS=', '
+for c in $choice; do
+  case "$c" in
+    1) install_skill "$SKILL_DEST_1" ;;
+    2) install_skill "$SKILL_DEST_2" ;;
+    3) install_skill "$SKILL_DEST_3" ;;
+    4) install_skill "$SKILL_DEST_4" ;;
+    s) ;;
+    *) printf 'unknown choice: %s\n' "$c" ;;
+  esac
+done
