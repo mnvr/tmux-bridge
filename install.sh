@@ -52,51 +52,47 @@ case ":$PATH:" in
 esac
 
 # Skill install locations
-SKILL_DEST_1=".agents/skills/tmux-bridge"
-SKILL_DEST_2=".claude/skills/tmux-bridge"
-SKILL_DEST_3="$HOME/.codex/skills/tmux-bridge"
-SKILL_DEST_4="$HOME/.claude/skills/tmux-bridge"
+SKILL_DEST_1="$HOME/.codex/skills/tmux-bridge"
+SKILL_DEST_2="$HOME/.claude/skills/tmux-bridge"
+SKILL_DEST_3=".agents/skills/tmux-bridge"
+SKILL_DEST_4=".claude/skills/tmux-bridge"
 
 install_skill() {
   mkdir -p "$1"
   cp "$SKILL_DIR/SKILL.md" "$1/SKILL.md"
-  printf '  %s\n' "$1"
+  printf '  installed skill to %s\n' "$1"
 }
 
-# Pre-select existing installs
-default=""
-for i in 1 2 3 4; do
-  eval "dest=\$SKILL_DEST_$i"
-  if [ -f "$dest/SKILL.md" ]; then
-    default="${default:+$default,}$i"
-  fi
-done
-
-printf '\nWhere should the skill be installed?\n'
-printf '  1) .agents/skills/tmux-bridge/    (this project, Codex)\n'
-printf '  2) .claude/skills/tmux-bridge/    (this project, Claude Code)\n'
-printf '  3) ~/.codex/skills/tmux-bridge/   (all projects, Codex)\n'
-printf '  4) ~/.claude/skills/tmux-bridge/  (all projects, Claude Code)\n'
-printf '  s) skip\n'
-if [ -n "$default" ]; then
-  printf 'Choice (comma-separated for multiple) [%s]: ' "$default"
-else
-  printf 'Choice (comma-separated for multiple) [s]: '
-fi
-read -r choice
-
-if [ -z "$choice" ]; then
-  choice="${default:-s}"
-fi
-
-IFS=', '
-for c in $choice; do
-  case "$c" in
-    1) install_skill "$SKILL_DEST_1" ;;
-    2) install_skill "$SKILL_DEST_2" ;;
-    3) install_skill "$SKILL_DEST_3" ;;
-    4) install_skill "$SKILL_DEST_4" ;;
-    s) ;;
-    *) printf 'unknown choice: %s\n' "$c" ;;
+# Parse flags
+AUTO=0
+for arg in "$@"; do
+  case "$arg" in
+    --auto) AUTO=1 ;;
   esac
 done
+
+if [ "$AUTO" -eq 1 ]; then
+  # Auto mode: install to ~/.codex and ~/.claude if they exist
+  installed=0
+  if [ -d "$HOME/.codex" ]; then
+    install_skill "$SKILL_DEST_1"
+    installed=$((installed + 1))
+  fi
+  if [ -d "$HOME/.claude" ]; then
+    install_skill "$SKILL_DEST_2"
+    installed=$((installed + 1))
+  fi
+  if [ "$installed" -eq 0 ]; then
+    printf '\nneither ~/.codex nor ~/.claude found, skipping skill install\n'
+  fi
+else
+  # Default mode: print instructions for installing the skill
+  printf '\nTo install the skill, copy it to one of:\n'
+  printf '  ~/.codex/skills/    (all projects, Codex)\n'
+  printf '  ~/.claude/skills/   (all projects, Claude Code)\n'
+  printf '  .agents/skills/     (this project, Codex)\n'
+  printf '  .claude/skills/     (this project, Claude Code)\n'
+  printf '\nFor example:\n'
+  printf '  cp -r %s ~/.codex/skills/\n' "$SKILL_DIR"
+  printf '\nOr rerun with --auto to install to ~/.codex and ~/.claude if they exist.\n'
+fi

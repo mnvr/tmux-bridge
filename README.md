@@ -14,16 +14,20 @@ Requires macOS and `tmux` (`brew install tmux`).
 curl -fsSL https://raw.githubusercontent.com/mnvr/tmux-bridge/main/install.sh | sh
 ```
 
-This installs the `tmux-bridge` binary to `~/.local/bin` and the agent skill to `~/.local/share/tmux-bridge`.
+This installs the `tmux-bridge` binary to `~/.local/bin` and the agent skill to `~/.local/share/tmux-bridge`. It then prints instructions for copying the skill to one of:
 
-Then add the skill to your project so your agent knows how to use the bridge:
+- `~/.codex/skills/` — all projects, Codex
+- `~/.claude/skills/` — all projects, Claude Code
+- `.agents/skills/` — this project, Codex
+- `.claude/skills/` — this project, Claude Code
+
+To auto-install the skill to `~/.codex/skills/` and `~/.claude/skills/` (if they exist), use `--auto`:
 
 ```sh
-mkdir -p .agents/skills
-cp -r ~/.local/share/tmux-bridge .agents/skills/
+curl -fsSL https://raw.githubusercontent.com/mnvr/tmux-bridge/main/install.sh | sh -s -- --auto
 ```
 
-For user-wide install, copy to `~/.codex/skills/` or `~/.claude/skills/` instead.
+Rerunning with `--auto` updates the skill in place.
 
 Claude Code will prompt for approval on each subcommand separately. To auto-approve all `tmux-bridge` commands, add to `.claude/settings.json` (project) or `~/.claude/settings.json` (user-wide):
 
