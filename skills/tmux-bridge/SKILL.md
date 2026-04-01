@@ -34,8 +34,8 @@ Notes:
 
 ## Collaboration
 
-- Keep bridge messages short and task-local.
-- If the coordination needs more than a short message, write it to a file and send a pointer.
+- Keep bridge messages short — one or two sentences.
+- For anything substantive (reviews, analysis, plans, code), write to a `/tmp/` file and send a pointer in the message.
 - Use `read`, `message`, and `keys` for agent-to-agent communication.
 - `message` and `keys ... Enter` are a strict sequential pair, not a parallel batch.
 - After `keys ... Enter`, `read` once to verify submission, then stop reading the target pane.
@@ -50,7 +50,7 @@ Notes:
 1. `list` panes.
 2. If the target pane does not exist, `split <label> <launcher>`.
 3. `read` the target pane.
-4. `message` one short handshake that tells the other agent to use `$tmux-bridge` and reply to the sender pane in the bridge header.
+4. `message` a short handshake. The other agent will see the bridge header and know how to reply — no need to explain `tmux-bridge` usage to it.
 5. `keys ... Enter`.
 6. `read` once to verify the prompt was actually submitted, then stop reading the target pane.
 
@@ -91,7 +91,7 @@ Start Claude in a new pane, then do a minimal handshake:
 tmux-bridge list
 tmux-bridge split claude claude
 tmux-bridge read claude 20
-tmux-bridge message claude "Use \$tmux-bridge to reply to the sender pane in this bridge header."
+tmux-bridge message claude "Hi, please review the changes in /tmp/review-request.md"
 tmux-bridge keys claude Enter
 tmux-bridge read claude 20
 ```
