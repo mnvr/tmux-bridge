@@ -38,8 +38,11 @@ write_config() {
   config_path=$RUNTIME_DIR/tmux-bridge.conf
   cat > "$config_path" <<'CONF'
 set -g mouse on
-set -g history-limit 20000
+set -g history-limit 60000
 set -g remain-on-exit failed
+set -g mode-keys vi
+bind -T copy-mode-vi WheelUpPane send-keys -X -N 1 scroll-up
+bind -T copy-mode-vi WheelDownPane send-keys -X -N 1 scroll-down
 set -g pane-border-status top
 set -g pane-active-border-style fg=colour39
 set -g pane-border-style fg=colour238
