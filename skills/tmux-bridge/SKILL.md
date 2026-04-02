@@ -32,6 +32,10 @@ Notes:
 - `keys` sends special keys such as `Enter`.
 
 
+## Replying
+
+When you receive a `[tmux-bridge from:<sender> ...]` message, reply using `tmux-bridge message <sender>` and `tmux-bridge keys <sender> Enter`. Do not just answer in your own pane — the sender cannot see your pane output.
+
 ## Collaboration
 
 - Keep bridge messages short — one or two sentences.
